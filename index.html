@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tradutor de PDF e EPUB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: coluna única estreita, três etapas em sequência (arquivo, opções, tradução). */
+:root {
+  --bg: #F1F5F3;
+  --surface: #FFFFFF;
+  --fg: #13201B;
+  --muted: #566861;
+  --line: #D3DDD8;
+  --accent: #0E6B5A;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #E1F0EB;
+  --good: #1B7F4B;
+  --warn: #8F5600;
+  --bad: #B3261E;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0D1411;
+    --surface: #141E1A;
+    --fg: #E6EEEA;
+    --muted: #93A59D;
+    --line: #263630;
+    --accent: #4FC3A7;
+    --accent-fg: #05201A;
+    --accent-soft: #15302A;
+    --good: #5CCB8C;
+    --warn: #E0A64A;
+    --bad: #FF8A80;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 var(--font-body);
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(28px, 6vw, 38px); line-height: 1.1; letter-spacing: -0.02em; }
+h2 { font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.lead { color: var(--muted); margin: 10px 0 8px; max-width: 56ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 500 12px var(--font-mono); }
+
+.drop { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 28px 16px; border: 1.5px dashed var(--line); border-radius: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
+.drop:hover, .drop.over, .drop:focus-within { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { font-weight: 600; }
+.drop span { color: var(--muted); font-size: 13px; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.fileinfo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fileinfo .name { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.fileinfo .meta { color: var(--muted); font: 400 12.5px var(--font-mono); }
+.tag { font: 500 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field label { font-size: 13px; font-weight: 500; }
+select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; width: 100%; }
+select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; }
+button { font: 600 14px var(--font-body); border-radius: 6px; padding: 10px 18px; cursor: pointer; border: 1px solid transparent; }
+.primary { background: var(--accent); color: var(--accent-fg); }
+.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+.ghost:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+.track { height: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.progress-row { display: flex; justify-content: space-between; gap: 12px; font: 400 12.5px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+#status { margin: 0; min-height: 1.5em; }
+.log { list-style: none; margin: 0; padding: 10px 12px; max-height: 160px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font: 400 12px/1.6 var(--font-mono); }
+.log .warn { color: var(--warn); }
+.log .bad { color: var(--bad); }
+.result { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 8px; background: var(--accent-soft); }
+.result p { margin: 0; }
+.result .ok { color: var(--good); font-weight: 600; }
+.warnbox { padding: 10px 12px; border: 1px solid var(--warn); border-radius: 6px; color: var(--warn); font-size: 13.5px; }
+.note { color: var(--muted); font-size: 12.5px; margin: 0; max-width: 64ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Tradutor de PDF e EPUB</h1>
+    <p class="lead">Escolha um livro ou documento. A página traduz o texto e devolve um arquivo no mesmo formato.</p>
+  </header>
+
+  <section class="card" aria-labelledby="h1s">
+    <h2 id="h1s"><span class="n">1</span>Arquivo</h2>
+    <label class="drop" id="drop" for="file">
+      <strong>Clique para escolher ou arraste o arquivo aqui</strong>
+      <span>PDF ou EPUB</span>
+      <input type="file" id="file" accept=".pdf,.epub,application/pdf,application/epub+zip">
+    </label>
+    <div class="fileinfo" id="fileInfo" hidden>
+      <div style="min-width:0"><div class="name" id="fileName"></div><div class="meta" id="fileMeta"></div></div>
+      <span class="tag" id="fileTag"></span>
+    </div>
+    <div class="warnbox" id="libWarn" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="h2s">
+    <h2 id="h2s"><span class="n">2</span>Idiomas e serviço</h2>
+    <div class="grid">
+      <div class="field"><label for="src">Idioma original</label><select id="src"></select></div>
+      <div class="field"><label for="tgt">Traduzir para</label><select id="tgt"></select></div>
+      <div class="field">
+        <label for="engine">Serviço de tradução</label>
+        <select id="engine">
+          <option value="google">Google Tradutor (gratuito, mais rápido)</option>
+          <option value="mymemory">MyMemory (gratuito, limite diário)</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint" id="engineHint"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h3s">
+    <h2 id="h3s"><span class="n">3</span>Tradução</h2>
+    <div class="actions">
+      <button class="primary" id="go" disabled>Traduzir</button>
+      <button class="ghost" id="cancel" hidden>Cancelar</button>
+    </div>
+    <div id="prog" hidden>
+      <div class="track" id="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="bar"></div></div>
+      <div class="progress-row" style="margin-top:8px"><span id="count"></span><span id="pct">0%</span><span id="eta"></span></div>
+    </div>
+    <p id="status" aria-live="polite"></p>
+    <div id="logWrap" hidden><ul class="log" id="log"></ul></div>
+    <div class="result" id="result" hidden>
+      <p class="ok" id="resultMsg"></p>
+      <div class="actions"><button class="primary" id="dl">Baixar arquivo traduzido</button></div>
+    </div>
+  </section>
+
+  <p class="note">O texto do arquivo é enviado em pedaços ao serviço escolhido para ser traduzido. No PDF, o resultado é um texto corrido novo: imagens, tabelas e a diagramação original não são mantidos. No EPUB, capítulos, imagens, estilos e índice são preservados, mas negrito, itálico e links dentro de um mesmo parágrafo se perdem. PDFs escaneados (só imagem) não têm texto para traduzir.</p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var HASL = /\p{L}/u;
+  var LANGS = [['en', 'Inglês'], ['pt', 'Português'], ['es', 'Espanhol'], ['fr', 'Francês'], ['de', 'Alemão'], ['it', 'Italiano']];
+
+  var state = { file: null, kind: null, busy: false, cancel: false, fatal: null, url: null };
+  var cache = new Map();
+  var failed = 0;
+
+  /* ---------- interface ---------- */
+  function fillSelect(sel, def) {
+    LANGS.forEach(function (l) {
+      var o = document.createElement('option');
+      o.value = l[0]; o.textContent = l[1];
+      if (l[0] === def) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+  fillSelect($('src'), 'en');
+  fillSelect($('tgt'), 'pt');
+
+  var HINTS = {
+    google: 'Usa o serviço público do Google Tradutor, sem chave e sem custo. Não é uma API oficial, então pode ficar lento ou recusar pedidos em livros muito grandes.',
+    mymemory: 'Gratuito, mas com cota diária pequena (cerca de 5 mil caracteres por dia sem cadastro). Serve para trechos curtos.'
+  };
+  function updateHint() { $('engineHint').textContent = HINTS[$('engine').value]; }
+  $('engine').addEventListener('change', updateHint);
+  updateHint();
+
+  function setStatus(t) { $('status').textContent = t; }
+  function log(t, cls) {
+    var li = document.createElement('li');
+    li.textContent = t;
+    if (cls) li.className = cls;
+    $('log').appendChild(li);
+    $('logWrap').hidden = false;
+    $('log').scrollTop = $('log').scrollHeight;
+  }
+  function setProgress(done, total) {
+    var f = total ? done / total : 0;
+    var p = Math.round(f * 100);
+    $('bar').style.width = p + '%';
+    $('pct').textContent = p + '%';
+    $('track').setAttribute('aria-valuenow', String(p));
+    $('count').textContent = done.toLocaleString('pt-BR') + ' de ' + total.toLocaleString('pt-BR') + ' trechos';
+  }
+  function fmtTime(s) {
+    s = Math.max(0, Math.round(s));
+    var m = Math.floor(s / 60), r = s % 60;
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  function fmtSize(b) {
+    if (b > 1048576) return (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+    return Math.max(1, Math.round(b / 1024)) + ' KB';
+  }
+
+  function checkLibs() {
+    var need = [];
+    if (state.kind === 'pdf') {
+      if (!window.pdfjsLib) need.push('leitor de PDF (pdf.js)');
+      if (!(window.jspdf && window.jspdf.jsPDF)) need.push('gerador de PDF (jsPDF)');
+    }
+    if (state.kind === 'epub' && !window.JSZip) need.push('leitor de EPUB (JSZip)');
+    var box = $('libWarn');
+    if (need.length) {
+      box.textContent = 'Não foi possível carregar: ' + need.join(', ') + '. Verifique a conexão com a internet e recarregue a página.';
+      box.hidden = false;
+      return false;
+    }
+    box.hidden = true;
+    return true;
+  }
+
+  function pickFile(f) {
+    if (!f || state.busy) return;
+    var ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (ext !== 'pdf' && ext !== 'epub') {
+      state.file = null; state.kind = null;
+      $('fileInfo').hidden = true;
+      $('go').disabled = true;
+      var box = $('libWarn');
+      box.textContent = 'Formato não suportado. Escolha um arquivo .pdf ou .epub.';
+      box.hidden = false;
+      return;
+    }
+    state.file = f; state.kind = ext;
+    $('fileName').textContent = f.name;
+    $('fileMeta').textContent = fmtSize(f.size);
+    $('fileTag').textContent = ext;
+    $('fileInfo').hidden = false;
+    $('result').hidden = true;
+    $('prog').hidden = true;
+    $('logWrap').hidden = true;
+    $('log').innerHTML = '';
+    setStatus('');
+    $('go').disabled = !checkLibs();
+  }
+  $('file').addEventListener('change', function (e) { pickFile(e.target.files[0]); });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) { pickFile(e.dataTransfer.files[0]); });
+
+  /* ---------- tradução ---------- */
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function decodeEntities(s) {
+    var ta = document.createElement('textarea');
+    ta.innerHTML = s;
+    return ta.value;
+  }
+
+  var ENGINES = {
+    google: {
+      max: 3500, conc: 4,
+      call: async function (text, s, d) {
+        var r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' + s + '&tl=' + d, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          body: 'q=' + encodeURIComponent(text)
+        });
+        if (r.status === 429) { var e429 = new Error('O Google limitou os pedidos (429).'); e429.slow = true; throw e429; }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var data = await r.json();
+        return data[0].map(function (seg) { return seg[0] || ''; }).join('');
+      }
+    },
+    mymemory: {
+      max: 450, conc: 2,
+      call: async function (text, s, d) {
+        if (d === 'pt') d = 'pt-BR';
+        if (s === 'pt') s = 'pt-BR';
+        var r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) + '&langpair=' + s + '|' + d);
+        var j = await r.json();
+        var out = j && j.responseData && j.responseData.translatedText || '';
+        var status = Number(j && j.responseStatus);
+        if (/MYMEMORY WARNING/i.test(out) || status === 429) {
+          var e = new Error('A cota diária do MyMemory acabou. Tente o Google Tradutor ou volte amanhã.');
+          e.fatal = true; throw e;
+        }
+        if (status !== 200) throw new Error('MyMemory: ' + (j && j.responseDetails || status));
+        return decodeEntities(out);
+      }
+    }
+  };
+
+  function splitText(text, max) {
+    if (text.length <= max) return [text];
+    var parts = [], cur = '';
+    var sentences = text.match(/[^.!?…]+[.!?…]+["'”’)\]]*\s*|[^.!?…]+$/g) || [text];
+    sentences.forEach(function (s) {
+      while (s.length > max) {
+        var cut = s.lastIndexOf(' ', max);
+        if (cut < max * 0.5) cut = max;
+        if (cur) { parts.push(cur); cur = ''; }
+        parts.push(s.slice(0, cut));
+        s = s.slice(cut);
+      }
+      if ((cur + s).length > max) { if (cur) parts.push(cur); cur = s; } else { cur += s; }
+    });
+    if (cur) parts.push(cur);
+    return parts;
+  }
+
+  async function withRetry(fn) {
+    var lastErr;
+    for (var i = 0; i < 4; i++) {
+      if (state.cancel) throw new Error('cancelado');
+      try { return await fn(); }
+      catch (e) {
+        if (e.fatal) throw e;
+        lastErr = e;
+        await sleep((e.slow ? 4000 : 800) * Math.pow(2, i) + Math.random() * 300);
+      }
+    }
+    throw lastErr;
+  }
+
+  async function translate(text, cfg) {
+    if (cache.has(text)) return cache.get(text);
+    var lead = text.match(/^\s*/)[0];
+    var trail = text.match(/\s*$/)[0];
+    var core = text.trim();
+    if (!core || !HASL.test(core)) return text;
+    var eng = ENGINES[cfg.engine];
+    var outParts = [];
+    var pieces = splitText(core, eng.max);
+    for (var i = 0; i < pieces.length; i++) {
+      var piece = pieces[i].trim();
+      if (!piece) continue;
+      outParts.push(await withRetry(function () { return eng.call(piece, cfg.src, cfg.tgt); }));
+    }
+    var res = lead + outParts.join(' ').trim() + trail;
+    cache.set(text, res);
+    return res;
+  }
+
+  async function runPool(texts, results, cfg, onProgress) {
+    var next = 0, done = 0;
+    var eng = ENGINES[cfg.engine];
+    async function worker() {
+      while (!state.cancel) {
+        var idx = next++;
+        if (idx >= texts.length) return;
+        try {
+          results[idx] = await translate(texts[idx], cfg);
+        } catch (e) {
+          if (e.fatal) { state.fatal = e.message; state.cancel = true; return; }
+          if (state.cancel) return;
+          failed++;
+          if (failed <= 20) log('Trecho ' + (idx + 1) + ' não traduzido (' + e.message + '). Mantido no original.', 'warn');
+        }
+        done++;
+        onProgress(done);
+      }
+    }
+    var workers = [];
+    for (var i = 0; i < eng.conc; i++) workers.push(worker());
+    await Promise.all(workers);
+  }
+
+  /* ---------- PDF: leitura ---------- */
+  var LIG = { 'ﬀ': 'ff', 'ﬁ': 'fi', 'ﬂ': 'fl', 'ﬃ': 'ffi', 'ﬄ': 'ffl' };
+  function fixLig(s) { return s.replace(/[ﬀ-ﬄ]/g, function (c) { return LIG[c]; }); }
+
+  function pageLines(items) {
+    var its = [];
+    items.forEach(function (it) {
+      if (!it.str) return;
+      var t = it.transform;
+      its.push({ s: fixLig(it.str), x: t[4], y: t[5], w: it.width || 0, h: Math.hypot(t[2], t[3]) || it.height || 10 });
+    });
+    its.sort(function (a, b) { return b.y - a.y; });
+    var groups = [];
+    its.forEach(function (it) {
+      var g = groups[groups.length - 1];
+      if (g && Math.abs(g.y - it.y) <= Math.max(2, g.h * 0.35)) g.items.push(it);
+      else groups.push({ y: it.y, h: it.h, items: [it] });
+    });
+    var lines = [];
+    groups.forEach(function (g) {
+      g.items.sort(function (a, b) { return a.x - b.x; });
+      var text = '', prevEnd = null, h = 0;
+      g.items.forEach(function (it) {
+        if (prevEnd !== null) {
+          var gap = it.x - prevEnd;
+          if (gap > g.h * 0.18 && !/\s$/.test(text) && !/^\s/.test(it.s)) text += ' ';
+        }
+        text += it.s;
+        prevEnd = it.x + it.w;
+        h = Math.max(h, it.h);
+      });
+      text = text.replace(/\s+/g, ' ').trim();
+      if (text) lines.push({ text: text, y: g.y, h: h, x: g.items[0].x });
+    });
+    return lines;
+  }
+
+  function buildParas(pages) {
+    var hs = [];
+    pages.forEach(function (p) { p.forEach(function (l) { hs.push(l.h); }); });
+    hs.sort(function (a, b) { return a - b; });
+    var med = hs.length ? hs[Math.floor(hs.length / 2)] : 10;
+    var END = /[.!?:;"”’')\]…]$/;
+    var NUM = /^(?:page\s+|p\.\s*)?\d{1,4}$/i;
+    var paras = [], cur = null;
+    function isHead(l) { return l.h > med * 1.25 && l.text.length < 140; }
+
+    pages.forEach(function (lines0) {
+      var lines = lines0.slice();
+      if (lines.length && NUM.test(lines[0].text)) lines.shift();
+      if (lines.length && NUM.test(lines[lines.length - 1].text)) lines.pop();
+      if (!lines.length) return;
+      var xs = lines.map(function (l) { return l.x; }).sort(function (a, b) { return a - b; });
+      var baseX = xs[Math.floor(xs.length * 0.2)];
+      var carry = cur && !cur.heading && !END.test(cur.text) && !isHead(lines[0]) && /^[a-zà-ÿ]/.test(lines[0].text);
+      if (cur && !carry) { paras.push(cur); cur = null; }
+      var prev = null;
+      lines.forEach(function (l) {
+        var head = isHead(l);
+        var nw = !cur;
+        if (!nw) {
+          if (head !== cur.heading) nw = true;
+          else if (prev && prev.y - l.y > Math.max(prev.h, l.h) * 1.7) nw = true;
+          else if (!head && l.x > baseX + l.h * 0.8 && END.test(cur.text)) nw = true;
+        }
+        if (nw) {
+          if (cur) paras.push(cur);
+          cur = { text: l.text, heading: head };
+        } else if (/[a-zà-ÿ]-$/.test(cur.text) && /^[a-zà-ÿ]/.test(l.text)) {
+          cur.text = cur.text.slice(0, -1) + l.text;
+        } else {
+          cur.text += ' ' + l.text;
+        }
+        prev = l;
+      });
+    });
+    if (cur) paras.push(cur);
+    return paras;
+  }
+
+  async function preparePdf(file) {
+    setStatus('Lendo o PDF…');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var data = new Uint8Array(await file.arrayBuffer());
+    var pdf = await pdfjsLib.getDocument({ data: data }).promise;
+    var pages = [];
+    for (var n = 1; n <= pdf.numPages; n++) {
+      if (state.cancel) throw new Error('cancelado');
+      var page = await pdf.getPage(n);
+      var tc = await page.getTextContent();
+      pages.push(pageLines(tc.items));
+      setStatus('Lendo o PDF: página ' + n + ' de ' + pdf.numPages);
+    }
+    var paras = buildParas(pages);
+    var chars = paras.reduce(function (a, p) { return a + p.text.length; }, 0);
+    if (chars < 40) throw new Error('Este PDF não tem texto selecionável (provavelmente é escaneado). Faça OCR antes de traduzir.');
+    log(pdf.numPages + ' páginas lidas, ' + paras.length.toLocaleString('pt-BR') + ' parágrafos.');
+    return {
+      texts: paras.map(function (p) { return p.text; }),
+      build: async function (tr) {
+        setStatus('Gerando o PDF…');
+        var out = paras.map(function (p, i) { return { heading: p.heading, text: tr[i] }; });
+        return buildPdf(out);
+      }
+    };
+  }
+
+  /* ---------- PDF: geração ---------- */
+  function toLatin1(s) {
+    return s
+      .replace(/[‘’‚′]/g, "'")
+      .replace(/[“”„″]/g, '"')
+      .replace(/[‐-―−]/g, '-')
+      .replace(/…/g, '...')
+      .replace(/[•●▪]/g, '·')
+      .replace(/[  -​  ﻿]/g, ' ')
+      .replace(/[\u0000-\u0008\u000B-\u001F]/g, '')
+      .replace(/[^\u0000-ÿ]/g, '');
+  }
+  function buildPdf(paras) {
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    var W = doc.internal.pageSize.getWidth();
+    var H = doc.internal.pageSize.getHeight();
+    var m = 64, maxW = W - 2 * m, y = m;
+    paras.forEach(function (p) {
+      var size = p.heading ? 15 : 11;
+      var lh = size * 1.45;
+      doc.setFont('helvetica', p.heading ? 'bold' : 'normal');
+      doc.setFontSize(size);
+      var lines = doc.splitTextToSize(toLatin1(p.text), maxW);
+      if (p.heading) {
+        y += size * 0.6;
+        if (y + lh * 3 > H - m) { doc.addPage(); y = m; }
+      }
+      lines.forEach(function (ln) {
+        if (y + lh > H - m) { doc.addPage(); y = m; }
+        doc.text(ln, m, y + size);
+        y += lh;
+      });
+      y += p.heading ? size * 0.4 : size * 0.7;
+    });
+    return doc.output('blob');
+  }
+
+  /* ---------- EPUB ---------- */
+  function resolvePath(dir, href) {
+    href = decodeURIComponent(href.split('#')[0]);
+    var parts = (dir + href).split('/'), out = [];
+    parts.forEach(function (p) {
+      if (p === '..') out.pop();
+      else if (p !== '.' && p !== '') out.push(p);
+    });
+    return out.join('/');
+  }
+  var BLOCK = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,dt,dd,figcaption,caption,div';
+
+  function pickTarget(el) {
+    for (;;) {
+      var kids = Array.prototype.filter.call(el.childNodes, function (n) {
+        return !(n.nodeType === 3 && !n.nodeValue.trim()) && n.nodeType !== 8;
+      });
+      if (kids.length === 1 && kids[0].nodeType === 1 && !/^(img|svg|br|math)$/i.test(kids[0].localName)) el = kids[0];
+      else return el;
+    }
+  }
+
+  function collectJobs(doc, add) {
+    var seen = new Set();
+    function perNode(tgt) {
+      var w = doc.createTreeWalker(tgt, 4);
+      var nodes = [], n;
+      while ((n = w.nextNode())) nodes.push(n);
+      nodes.forEach(function (node) {
+        if (HASL.test(node.nodeValue)) add(node.nodeValue.replace(/\s+/g, ' '), function (v) { node.nodeValue = v; });
+      });
+    }
+    function push(el) {
+      if (seen.has(el)) return;
+      seen.add(el);
+      var tgt = pickTarget(el);
+      if (tgt !== el) { if (seen.has(tgt)) return; seen.add(tgt); }
+      if (!tgt.children.length) {
+        var t = tgt.textContent.replace(/\s+/g, ' ');
+        if (HASL.test(t)) add(t, function (v) { tgt.textContent = v; });
+        return;
+      }
+      if (tgt.querySelector('img,svg,image,math,ruby,br')) { perNode(tgt); return; }
+      var t2 = tgt.textContent.replace(/\s+/g, ' ');
+      if (HASL.test(t2)) add(t2, function (v) { tgt.textContent = v; });
+    }
+    var title = doc.querySelector('head > title');
+    if (title) push(title);
+    Array.prototype.forEach.call(doc.querySelectorAll(BLOCK), function (el) {
+      if (el.closest('pre,script,style')) return;
+      if (!el.querySelector(BLOCK)) { push(el); return; }
+      if (el.localName === 'li') {
+        Array.prototype.forEach.call(el.children, function (c) {
+          if ((c.localName === 'a' || c.localName === 'span') && !c.children.length) push(c);
+        });
+      }
+    });
+  }
+
+  function serialize(doc) {
+    var s = new XMLSerializer().serializeToString(doc);
+    return /^<\?xml/.test(s) ? s : '<?xml version="1.0" encoding="utf-8"?>\n' + s;
+  }
+
+  async function prepareEpub(file, cfg) {
+    setStatus('Abrindo o EPUB…');
+    var zip = await JSZip.loadAsync(await file.arrayBuffer());
+    var cf = zip.file('META-INF/container.xml');
+    if (!cf) throw new Error('EPUB inválido: container.xml não encontrado.');
+    var P = new DOMParser();
+    var cdoc = P.parseFromString(await cf.async('string'), 'application/xml');
+    var rf = cdoc.getElementsByTagNameNS('*', 'rootfile')[0];
+    if (!rf) throw new Error('EPUB inválido: arquivo OPF não encontrado.');
+    var opfPath = rf.getAttribute('full-path');
+    var opfFile = zip.file(opfPath);
+    if (!opfFile) throw new Error('EPUB inválido: ' + opfPath + ' ausente.');
+    var opf = P.parseFromString(await opfFile.async('string'), 'application/xml');
+    var dir = opfPath.indexOf('/') >= 0 ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+
+    var entries = [];
+    Array.prototype.forEach.call(opf.getElementsByTagNameNS('*', 'item'), function (it) {
+      var type = it.getAttribute('media-type'), href = it.getAttribute('href');
+      if (!href) return;
+      if (type === 'application/xhtml+xml' || type === 'text/html') entries.push({ path: resolvePath(dir, href), kind: 'x' });
+      else if (type === 'application/x-dtbncx+xml') entries.push({ path: resolvePath(dir, href), kind: 'ncx' });
+    });
+
+    var texts = [], setters = [], docs = [], loose = 0;
+    function add(t, setter) { texts.push(t); setters.push(setter); }
+
+    for (var i = 0; i < entries.length; i++) {
+      if (state.cancel) throw new Error('cancelado');
+      var e = entries[i];
+      var f = zip.file(e.path);
+      if (!f) continue;
+      setStatus('Lendo capítulos: ' + (i + 1) + ' de ' + entries.length);
+      var str = await f.async('string');
+      var d;
+      if (e.kind === 'ncx') {
+        d = P.parseFromString(str, 'application/xml');
+        if (d.querySelector('parsererror')) continue;
+        Array.prototype.forEach.call(d.getElementsByTagNameNS('*', 'text'), function (tn) {
+          var t = tn.textContent;
+          if (HASL.test(t)) add(t.replace(/\s+/g, ' '), function (v) { tn.textContent = v; });
+        });
+      } else {
+        d = P.parseFromString(str, 'application/xhtml+xml');
+        if (d.querySelector('parsererror')) { d = P.parseFromString(str, 'text/html'); loose++; }
+        collectJobs(d, add);
+        var root = d.documentElement;
+        if (root.hasAttribute('lang')) root.setAttribute('lang', cfg.tgt);
+        if (root.hasAttribute('xml:lang')) root.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:lang', cfg.tgt);
+      }
+      docs.push({ path: e.path, doc: d });
+    }
+    var ot = opf.getElementsByTagNameNS('*', 'title')[0];
+    if (ot && HASL.test(ot.textContent)) add(ot.textContent, function (v) { ot.textContent = v; });
+    Array.prototype.forEach.call(opf.getElementsByTagNameNS('*', 'language'), function (ln) { ln.textContent = cfg.tgt; });
+
+    if (!texts.length) throw new Error('Nenhum texto encontrado neste EPUB.');
+    log(docs.length + ' arquivos de conteúdo, ' + texts.length.toLocaleString('pt-BR') + ' trechos de texto.');
+    if (loose) log(loose + ' capítulo(s) tinham HTML fora do padrão e foram corrigidos na leitura.', 'warn');
+
+    return {
+      texts: texts,
+      build: async function (tr) {
+        setStatus('Gerando o EPUB…');
+        setters.forEach(function (set, i) { set(tr[i]); });
+        docs.forEach(function (d) { zip.file(d.path, serialize(d.doc)); });
+        zip.file(opfPath, serialize(opf));
+        zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+        return zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip', compression: 'DEFLATE' });
+      }
+    };
+  }
+
+  /* ---------- fluxo principal ---------- */
+  function setBusy(b) {
+    state.busy = b;
+    $('go').disabled = b || !state.file;
+    $('cancel').hidden = !b;
+    ['file', 'src', 'tgt', 'engine'].forEach(function (id) { $(id).disabled = b; });
+  }
+
+  async function run() {
+    if (!state.file || state.busy) return;
+    if (!checkLibs()) return;
+    var cfg = { src: $('src').value, tgt: $('tgt').value, engine: $('engine').value };
+    if (cfg.src === cfg.tgt) { setStatus('Escolha idiomas diferentes para origem e destino.'); return; }
+
+    state.cancel = false; state.fatal = null; failed = 0; cache.clear();
+    if (state.url) { URL.revokeObjectURL(state.url); state.url = null; }
+    $('result').hidden = true;
+    $('log').innerHTML = ''; $('logWrap').hidden = true;
+    $('prog').hidden = false;
+    setProgress(0, 0); $('count').textContent = ''; $('eta').textContent = '';
+    setBusy(true);
+    var t0 = Date.now();
+
+    try {
+      var job = state.kind === 'pdf' ? await preparePdf(state.file) : await prepareEpub(state.file, cfg);
+      var texts = job.texts;
+      var results = texts.slice();
+      setProgress(0, texts.length);
+      setStatus('Traduzindo…');
+      await runPool(texts, results, cfg, function (done) {
+        setProgress(done, texts.length);
+        var el = (Date.now() - t0) / 1000;
+        $('eta').textContent = done > 15 ? 'faltam ~' + fmtTime(el / done * (texts.length - done)) : '';
+        setStatus('Traduzindo… ' + fmtTime(el) + ' decorridos');
+      });
+
+      if (state.cancel && !state.fatal) { setStatus('Tradução cancelada.'); return; }
+      if (state.fatal) log(state.fatal, 'bad');
+
+      var blob = await job.build(results);
+      state.url = URL.createObjectURL(blob);
+      var base = state.file.name.replace(/\.(pdf|epub)$/i, '');
+      state.outName = base + '_' + cfg.tgt + '.' + state.kind;
+      var msg = state.fatal
+        ? 'Arquivo parcial pronto: os trechos restantes ficaram no idioma original.'
+        : 'Tradução concluída em ' + fmtTime((Date.now() - t0) / 1000) + '.';
+      if (failed) msg += ' ' + failed + ' trecho(s) não puderam ser traduzidos e ficaram no original.';
+      $('resultMsg').textContent = msg;
+      $('result').hidden = false;
+      setStatus('');
+      setProgress(texts.length, texts.length);
+    } catch (e) {
+      if (e && e.message === 'cancelado') setStatus('Tradução cancelada.');
+      else { setStatus(''); log('Erro: ' + (e && e.message || e), 'bad'); }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  $('go').addEventListener('click', run);
+  $('cancel').addEventListener('click', function () { state.cancel = true; setStatus('Cancelando…'); });
+  $('dl').addEventListener('click', function () {
+    if (!state.url) return;
+    var a = document.createElement('a');
+    a.href = state.url; a.download = state.outName || 'traduzido';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+})();
+</script>
+</body>
+</html>
