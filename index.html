@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tradutor de PDF e EPUB</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230E6B5A'/%3E%3Cpath d='M32 20c-5-3-12-3-18-1v26c6-2 13-2 18 1 5-3 12-3 18-1V19c-6-2-13-2-18 1z' fill='%23ffffff'/%3E%3Cpath d='M32 21v25' stroke='%230E6B5A' stroke-width='2.5'/%3E%3Cpath d='M18 29h9' stroke='%230E6B5A' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M37 29h9m-3.5-3.5L46 29l-3.5 3.5' stroke='%230E6B5A' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -100,6 +101,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .result .ok { color: var(--good); font-weight: 600; }
 .warnbox { padding: 10px 12px; border: 1px solid var(--warn); border-radius: 6px; color: var(--warn); font-size: 13.5px; }
 .note { color: var(--muted); font-size: 12.5px; margin: 0; max-width: 64ch; }
+[hidden] { display: none !important; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { width: 44px; height: 44px; flex: none; }
+.pvbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font: 400 12.5px var(--font-mono); color: var(--muted); }
+.pvbar .pg { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pvbar button { padding: 6px 12px; font-size: 13px; }
+.check { display: flex; align-items: center; gap: 8px; font: 400 13px var(--font-body); color: var(--fg); }
+.pvlist { display: flex; flex-direction: column; gap: 12px; }
+.pv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pvlist.solo .pv { grid-template-columns: 1fr; }
+.pvlist.solo .pv .orig { display: none; }
+.pv .orig { color: var(--muted); font-size: 13px; padding: 9px 10px; border-left: 2px solid var(--line); overflow-wrap: anywhere; min-width: 0; }
+.pv textarea { width: 100%; min-width: 0; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; resize: vertical; min-height: 2.8em; overflow: hidden; line-height: 1.55; }
+.pv textarea.head { font-family: var(--font-display); font-weight: 700; font-size: 17px; }
+.pv textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pv .miss { grid-column: 1 / -1; font: 500 11px var(--font-mono); color: var(--warn); letter-spacing: .04em; }
+@media (max-width: 560px) { .pv { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -109,7 +127,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <body>
 <main>
   <header>
-    <h1>Tradutor de PDF e EPUB</h1>
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="14" style="fill:var(--accent)"/>
+        <path d="M32 20c-5-3-12-3-18-1v26c6-2 13-2 18 1 5-3 12-3 18-1V19c-6-2-13-2-18 1z" style="fill:var(--accent-fg)"/>
+        <path d="M32 21v25" style="stroke:var(--accent);stroke-width:2.5"/>
+        <path d="M18 29h9" style="stroke:var(--accent);stroke-width:2.6;stroke-linecap:round"/>
+        <path d="M37 29h9m-3.5-3.5L46 29l-3.5 3.5" style="stroke:var(--accent);stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round"/>
+      </svg>
+      <h1>Tradutor de PDF e EPUB</h1>
+    </div>
     <p class="lead">Escolha um livro ou documento. A página traduz o texto e devolve um arquivo no mesmo formato.</p>
   </header>
 
@@ -155,9 +182,28 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     </div>
     <p id="status" aria-live="polite"></p>
     <div id="logWrap" hidden><ul class="log" id="log"></ul></div>
+  </section>
+
+  <section class="card" id="previewCard" aria-labelledby="h4s" hidden>
+    <h2 id="h4s"><span class="n">4</span>Prévia e ajustes</h2>
+    <p class="hint">É assim que o texto vai entrar no arquivo. Corrija o que quiser nos campos de tradução. Nada foi gerado ainda.</p>
+    <div class="pvbar">
+      <label class="check"><input type="checkbox" id="showOrig" checked> Mostrar o original ao lado</label>
+      <div class="pg"><button class="ghost pgPrev" type="button">Anterior</button><span class="pgInfo"></span><button class="ghost pgNext" type="button">Próxima</button></div>
+    </div>
+    <div class="pvbar" id="missBar" hidden>
+      <span id="missInfo"></span>
+      <button class="ghost" id="retry" type="button">Tentar de novo os não traduzidos</button>
+    </div>
+    <div class="pvlist" id="pvList"></div>
+    <div class="pvbar">
+      <span></span>
+      <div class="pg"><button class="ghost pgPrev" type="button">Anterior</button><span class="pgInfo"></span><button class="ghost pgNext" type="button">Próxima</button></div>
+    </div>
+    <div class="actions"><button class="primary" id="build" type="button">Gerar arquivo</button></div>
     <div class="result" id="result" hidden>
       <p class="ok" id="resultMsg"></p>
-      <div class="actions"><button class="primary" id="dl">Baixar arquivo traduzido</button></div>
+      <div class="actions"><button class="primary" id="dl" type="button">Baixar arquivo traduzido</button></div>
     </div>
   </section>
 
@@ -170,9 +216,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   var $ = function (id) { return document.getElementById(id); };
   var HASL = /\p{L}/u;
-  var LANGS = [['en', 'Inglês'], ['pt', 'Português'], ['es', 'Espanhol'], ['fr', 'Francês'], ['de', 'Alemão'], ['it', 'Italiano']];
+  var LANGS = [['en', 'Inglês'], ['pt', 'Português (Brasil)'], ['es', 'Espanhol'], ['fr', 'Francês'], ['de', 'Alemão'], ['it', 'Italiano']];
 
-  var state = { file: null, kind: null, busy: false, cancel: false, fatal: null, url: null };
+  var state = { file: null, kind: null, busy: false, cancel: false, fatal: null, url: null, job: null, results: null, ok: null, cfg: null, page: 0, outName: '' };
+  function bcp(code) { return code === 'pt' ? 'pt-BR' : code; }
   var cache = new Map();
   var failed = 0;
 
@@ -189,8 +236,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   fillSelect($('tgt'), 'pt');
 
   var HINTS = {
-    google: 'Usa o serviço público do Google Tradutor, sem chave e sem custo. Não é uma API oficial, então pode ficar lento ou recusar pedidos em livros muito grandes.',
-    mymemory: 'Gratuito, mas com cota diária pequena (cerca de 5 mil caracteres por dia sem cadastro). Serve para trechos curtos.'
+    google: 'Usa o serviço público do Google Tradutor, sem chave e sem custo, com saída em português do Brasil. Não é uma API oficial, então pode ficar lento ou recusar pedidos em livros muito grandes.',
+    mymemory: 'Gratuito, com saída em português do Brasil (pt-BR), mas com cota diária pequena (cerca de 5 mil caracteres por dia sem cadastro). Serve para trechos curtos.'
   };
   function updateHint() { $('engineHint').textContent = HINTS[$('engine').value]; }
   $('engine').addEventListener('change', updateHint);
@@ -257,6 +304,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     $('fileMeta').textContent = fmtSize(f.size);
     $('fileTag').textContent = ext;
     $('fileInfo').hidden = false;
+    $('previewCard').hidden = true;
+    state.job = null;
     $('result').hidden = true;
     $('prog').hidden = true;
     $('logWrap').hidden = true;
@@ -284,13 +333,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   var ENGINES = {
     google: {
-      max: 3500, conc: 4,
+      max: 3500, conc: 2, gap: 350,
       call: async function (text, s, d) {
-        var r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' + s + '&tl=' + d, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-          body: 'q=' + encodeURIComponent(text)
-        });
+        var r;
+        try {
+          r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' + s + '&tl=' + d, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'q=' + encodeURIComponent(text)
+          });
+        } catch (netErr) {
+          var eNet = new Error('sem resposta do Google, possível limite de pedidos');
+          eNet.slow = true;
+          throw eNet;
+        }
         if (r.status === 429) { var e429 = new Error('O Google limitou os pedidos (429).'); e429.slow = true; throw e429; }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var data = await r.json();
@@ -336,13 +392,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   async function withRetry(fn) {
     var lastErr;
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 5; i++) {
       if (state.cancel) throw new Error('cancelado');
       try { return await fn(); }
       catch (e) {
         if (e.fatal) throw e;
         lastErr = e;
-        await sleep((e.slow ? 4000 : 800) * Math.pow(2, i) + Math.random() * 300);
+        await sleep((e.slow ? 3000 : 800) * Math.pow(2, i) + Math.random() * 300);
       }
     }
     throw lastErr;
@@ -360,6 +416,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     for (var i = 0; i < pieces.length; i++) {
       var piece = pieces[i].trim();
       if (!piece) continue;
+      if (eng.gap) await sleep(eng.gap);
       outParts.push(await withRetry(function () { return eng.call(piece, cfg.src, cfg.tgt); }));
     }
     var res = lead + outParts.join(' ').trim() + trail;
@@ -367,7 +424,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     return res;
   }
 
-  async function runPool(texts, results, cfg, onProgress) {
+  async function runPool(texts, results, ok, cfg, onProgress) {
     var next = 0, done = 0;
     var eng = ENGINES[cfg.engine];
     async function worker() {
@@ -376,6 +433,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
         if (idx >= texts.length) return;
         try {
           results[idx] = await translate(texts[idx], cfg);
+          ok[idx] = true;
         } catch (e) {
           if (e.fatal) { state.fatal = e.message; state.cancel = true; return; }
           if (state.cancel) return;
@@ -490,6 +548,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     log(pdf.numPages + ' páginas lidas, ' + paras.length.toLocaleString('pt-BR') + ' parágrafos.');
     return {
       texts: paras.map(function (p) { return p.text; }),
+      heads: paras.map(function (p) { return p.heading; }),
       build: async function (tr) {
         setStatus('Gerando o PDF…');
         var out = paras.map(function (p, i) { return { heading: p.heading, text: tr[i] }; });
@@ -646,14 +705,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
         if (d.querySelector('parsererror')) { d = P.parseFromString(str, 'text/html'); loose++; }
         collectJobs(d, add);
         var root = d.documentElement;
-        if (root.hasAttribute('lang')) root.setAttribute('lang', cfg.tgt);
-        if (root.hasAttribute('xml:lang')) root.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:lang', cfg.tgt);
+        if (root.hasAttribute('lang')) root.setAttribute('lang', bcp(cfg.tgt));
+        if (root.hasAttribute('xml:lang')) root.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:lang', bcp(cfg.tgt));
       }
       docs.push({ path: e.path, doc: d });
     }
     var ot = opf.getElementsByTagNameNS('*', 'title')[0];
     if (ot && HASL.test(ot.textContent)) add(ot.textContent, function (v) { ot.textContent = v; });
-    Array.prototype.forEach.call(opf.getElementsByTagNameNS('*', 'language'), function (ln) { ln.textContent = cfg.tgt; });
+    Array.prototype.forEach.call(opf.getElementsByTagNameNS('*', 'language'), function (ln) { ln.textContent = bcp(cfg.tgt); });
 
     if (!texts.length) throw new Error('Nenhum texto encontrado neste EPUB.');
     log(docs.length + ' arquivos de conteúdo, ' + texts.length.toLocaleString('pt-BR') + ' trechos de texto.');
@@ -688,6 +747,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
     state.cancel = false; state.fatal = null; failed = 0; cache.clear();
     if (state.url) { URL.revokeObjectURL(state.url); state.url = null; }
+    $('previewCard').hidden = true;
+    state.job = null;
     $('result').hidden = true;
     $('log').innerHTML = ''; $('logWrap').hidden = true;
     $('prog').hidden = false;
@@ -699,9 +760,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       var job = state.kind === 'pdf' ? await preparePdf(state.file) : await prepareEpub(state.file, cfg);
       var texts = job.texts;
       var results = texts.slice();
+      var ok = new Array(texts.length).fill(false);
       setProgress(0, texts.length);
       setStatus('Traduzindo…');
-      await runPool(texts, results, cfg, function (done) {
+      await runPool(texts, results, ok, cfg, function (done) {
         setProgress(done, texts.length);
         var el = (Date.now() - t0) / 1000;
         $('eta').textContent = done > 15 ? 'faltam ~' + fmtTime(el / done * (texts.length - done)) : '';
@@ -711,18 +773,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       if (state.cancel && !state.fatal) { setStatus('Tradução cancelada.'); return; }
       if (state.fatal) log(state.fatal, 'bad');
 
-      var blob = await job.build(results);
-      state.url = URL.createObjectURL(blob);
+      state.job = job; state.results = results; state.ok = ok; state.cfg = cfg; state.page = 0;
       var base = state.file.name.replace(/\.(pdf|epub)$/i, '');
-      state.outName = base + '_' + cfg.tgt + '.' + state.kind;
+      state.outName = base + '_' + bcp(cfg.tgt) + '.' + state.kind;
       var msg = state.fatal
-        ? 'Arquivo parcial pronto: os trechos restantes ficaram no idioma original.'
+        ? 'Tradução parcial: os trechos restantes ficaram no idioma original.'
         : 'Tradução concluída em ' + fmtTime((Date.now() - t0) / 1000) + '.';
-      if (failed) msg += ' ' + failed + ' trecho(s) não puderam ser traduzidos e ficaram no original.';
-      $('resultMsg').textContent = msg;
-      $('result').hidden = false;
-      setStatus('');
+      if (failed) msg += ' ' + failed + ' trecho(s) não puderam ser traduzidos.';
+      setStatus(msg + ' Confira a prévia abaixo antes de gerar o arquivo.');
       setProgress(texts.length, texts.length);
+      showPreview();
     } catch (e) {
       if (e && e.message === 'cancelado') setStatus('Tradução cancelada.');
       else { setStatus(''); log('Erro: ' + (e && e.message || e), 'bad'); }
@@ -730,6 +790,125 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       setBusy(false);
     }
   }
+
+  /* ---------- prévia ---------- */
+  var PER = 25;
+  function fit(ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+
+  function previewRow(i, texts, tr, lang) {
+    var row = document.createElement('div');
+    row.className = 'pv';
+    var o = document.createElement('div');
+    o.className = 'orig';
+    o.textContent = texts[i];
+    var ta = document.createElement('textarea');
+    ta.value = tr[i];
+    ta.lang = lang;
+    ta.spellcheck = true;
+    ta.setAttribute('aria-label', 'Tradução do trecho ' + (i + 1));
+    if (state.job.heads && state.job.heads[i]) ta.className = 'head';
+    ta.addEventListener('input', function () { tr[i] = ta.value; fit(ta); $('result').hidden = true; });
+    row.appendChild(o);
+    row.appendChild(ta);
+    if (!state.ok[i] && HASL.test(texts[i])) {
+      var m = document.createElement('div');
+      m.className = 'miss';
+      m.textContent = 'NÃO TRADUZIDO: traduza aqui ou deixe o original.';
+      row.appendChild(m);
+    }
+    return row;
+  }
+
+  function renderPreview() {
+    var job = state.job;
+    if (!job) return;
+    var texts = job.texts, tr = state.results;
+    var pages = Math.max(1, Math.ceil(texts.length / PER));
+    state.page = Math.min(Math.max(0, state.page), pages - 1);
+    var from = state.page * PER, to = Math.min(texts.length, from + PER);
+    var list = $('pvList');
+    list.innerHTML = '';
+    list.classList.toggle('solo', !$('showOrig').checked);
+    var miss = 0;
+    for (var j = 0; j < texts.length; j++) if (!state.ok[j] && HASL.test(texts[j])) miss++;
+    $('missBar').hidden = miss === 0;
+    $('missInfo').textContent = miss.toLocaleString('pt-BR') + ' trecho(s) sem tradução.';
+    var lang = bcp(state.cfg.tgt);
+    var frag = document.createDocumentFragment();
+    for (var i = from; i < to; i++) frag.appendChild(previewRow(i, texts, tr, lang));
+    list.appendChild(frag);
+    Array.prototype.forEach.call(list.querySelectorAll('textarea'), fit);
+    var info = 'Trechos ' + (from + 1) + '–' + to + ' de ' + texts.length.toLocaleString('pt-BR');
+    Array.prototype.forEach.call(document.querySelectorAll('.pgInfo'), function (el) { el.textContent = info; });
+    Array.prototype.forEach.call(document.querySelectorAll('.pgPrev'), function (b) { b.disabled = state.page === 0; });
+    Array.prototype.forEach.call(document.querySelectorAll('.pgNext'), function (b) { b.disabled = state.page >= pages - 1; });
+  }
+
+  function showPreview() {
+    $('result').hidden = true;
+    $('build').textContent = 'Gerar ' + state.kind.toUpperCase();
+    $('previewCard').hidden = false;
+    renderPreview();
+    $('previewCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function goPage(d) {
+    state.page += d;
+    renderPreview();
+    $('previewCard').scrollIntoView({ block: 'start' });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.pgPrev'), function (b) { b.addEventListener('click', function () { goPage(-1); }); });
+  Array.prototype.forEach.call(document.querySelectorAll('.pgNext'), function (b) { b.addEventListener('click', function () { goPage(1); }); });
+  $('showOrig').addEventListener('change', function () { renderPreview(); });
+
+  $('retry').addEventListener('click', async function () {
+    if (!state.job || state.busy) return;
+    var texts = state.job.texts, cfg = state.cfg, idxs = [];
+    for (var i = 0; i < texts.length; i++) if (!state.ok[i] && HASL.test(texts[i])) idxs.push(i);
+    if (!idxs.length) return;
+    state.cancel = false;
+    setBusy(true);
+    $('retry').disabled = true;
+    $('build').disabled = true;
+    var fixed = 0;
+    try {
+      for (var k = 0; k < idxs.length && !state.cancel; k++) {
+        var idx = idxs[k];
+        setStatus('Tentando de novo: ' + (k + 1) + ' de ' + idxs.length + ' (' + fixed + ' recuperados)');
+        try {
+          state.results[idx] = await translate(texts[idx], cfg);
+          state.ok[idx] = true;
+          fixed++;
+        } catch (e) {
+          if (e.fatal) { log(e.message, 'bad'); break; }
+        }
+        await sleep(600);
+      }
+    } finally {
+      setBusy(false);
+      $('retry').disabled = false;
+      $('build').disabled = false;
+      setStatus(fixed + ' de ' + idxs.length + ' trecho(s) recuperados.');
+      renderPreview();
+    }
+  });
+
+  $('build').addEventListener('click', async function () {
+    if (!state.job) return;
+    $('build').disabled = true;
+    try {
+      if (state.url) { URL.revokeObjectURL(state.url); state.url = null; }
+      var blob = await state.job.build(state.results);
+      state.url = URL.createObjectURL(blob);
+      $('resultMsg').textContent = 'Arquivo gerado: ' + state.outName + ' (' + fmtSize(blob.size) + ').';
+      $('result').hidden = false;
+      setStatus('');
+    } catch (e) {
+      log('Erro ao gerar o arquivo: ' + (e && e.message || e), 'bad');
+    } finally {
+      $('build').disabled = false;
+    }
+  });
 
   $('go').addEventListener('click', run);
   $('cancel').addEventListener('click', function () { state.cancel = true; setStatus('Cancelando…'); });
